@@ -16,5 +16,5 @@
 namespace sdk {
     inline CSchemaSystem* g_schema = nullptr;
 
-    void GenerateTypeScopeSdk(CSchemaSystemTypeScope* current);
+    void GenerateTypeScopeSdk(CSchemaSystemTypeScope* current, const char* outDirName);
 } // namespace sdk

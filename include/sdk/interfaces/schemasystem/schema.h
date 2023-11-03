@@ -4,53 +4,11 @@
 #include <SDK/Interfaces/common/CUtlTSHash.h>
 #include <tools/virtual.h>
 
-#define CSGO2
-
-#ifdef SBOX
-// untested, CSchemaType::m_schema_type_ might be wrong
-    #define CSCHEMATYPE_GETSIZES_INDEX 5
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x5420
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x450
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x27FC
-#elif defined ARTIFACT2
-// untested, CSchemaType::m_schema_type_ might be wrong
-    #define CSCHEMATYPE_GETSIZES_INDEX 5
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x5430
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x450
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x2804
-#elif defined ARTIFACT1
-// untested, CSchemaType::m_schema_type_ might be wrong
-    #define CSCHEMATYPE_GETSIZES_INDEX 5
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x4428
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x4B8
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x2001
-#elif defined DOTA2
-    #define CSCHEMATYPE_GETSIZES_INDEX 3
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x190
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x450
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x2804
-#elif defined UNDERLORDS
-// untested, CSchemaType::m_schema_type_ might be wrong
-    #define CSCHEMATYPE_GETSIZES_INDEX 5
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x5420
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x450
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x27FC
-#elif defined DESKJOB
-    #define CSCHEMATYPE_GETSIZES_INDEX 3
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x3A0
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x450
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x2804
-#elif defined HL_ALYX
-    #error "unimplemented"
-#elif defined THE_LAB_ROBOT_REPAIR
-    #error "unimplemented"
-#elif defined CSGO2
-    #define CSCHEMATYPE_GETSIZES_INDEX 3
-    #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x190
-    #define SCHEMASYSTEMTYPESCOPE_OFF1 0x47E
-    #define SCHEMASYSTEMTYPESCOPE_OFF2 0x2808
-    #define SCHEMASYSTEM_FIND_DECLARED_CLASS_TYPE 2
-#endif
+#define CSCHEMATYPE_GETSIZES_INDEX 3
+#define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x190
+#define SCHEMASYSTEMTYPESCOPE_OFF1 0x47E
+#define SCHEMASYSTEMTYPESCOPE_OFF2 0x2808
+#define SCHEMASYSTEM_FIND_DECLARED_CLASS_TYPE 2
 
 class CSchemaClassInfo;
 class CSchemaSystemTypeScope;

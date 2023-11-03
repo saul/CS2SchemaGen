@@ -6,15 +6,13 @@
 namespace {
     using namespace std::string_view_literals;
 
-    constexpr std::string_view kOutDirName = "C:\\Code\\demofile-net\\src\\DemoFile.SdkGen\\Schema"sv;
-
     constexpr std::initializer_list<fnv32::hash> kStringMetadataEntries = {
         FNV32("MNetworkChangeCallback"),  FNV32("MPropertyFriendlyName"), FNV32("MPropertyDescription"),
         FNV32("MPropertyAttributeRange"), FNV32("MPropertyStartGroup"),   FNV32("MPropertyAttributeChoiceName"),
         FNV32("MPropertyGroupName"),      FNV32("MNetworkUserGroup"),     FNV32("MNetworkAlias"),
         FNV32("MNetworkTypeAlias"),       FNV32("MNetworkSerializer"),    FNV32("MPropertyAttributeEditor"),
-                                                                           FNV32("MPropertySuppressExpr"),  FNV32("MKV3TransferName"),
-                                                                           FNV32("MNetworkEncoder"), //       FNV32("MNetworkSendProxyRecipientsFilter")
+        FNV32("MPropertySuppressExpr"),   FNV32("MKV3TransferName"),      FNV32("MNetworkEncoder"),
+        FNV32("MNetworkSendProxyRecipientsFilter")
     };
 
     constexpr std::initializer_list<fnv32::hash> kIntegerMetadataEntries = {
@@ -38,7 +36,7 @@ namespace {
 namespace sdk {
     namespace {
         void AssembleEnums(codegen::generator_t::self_ref builder, CUtlTSHash<CSchemaEnumBinding*> enums) {
-            builder.json_key("enums").begin_json_object();
+            builder.json_key("enums").begin_json_object_value();
 
             for (auto schema_enum_binding : enums.GetElements()) {
                 // @note: @es3n1n: get type name by align size
@@ -72,13 +70,13 @@ namespace sdk {
 
                 // @note: @es3n1n: begin enum class
                 //
-                builder.json_key(schema_enum_binding->m_binding_name_).begin_json_object();
+                builder.json_key(schema_enum_binding->m_binding_name_).begin_json_object_value();
 
                 builder.json_key("align").json_literal(schema_enum_binding->m_align_);
 
                 // @note: @es3n1n: assemble enum items
                 //
-                builder.json_key("items").begin_json_array();
+                builder.json_key("items").begin_json_array_value();
                 for (auto l = 0; l < schema_enum_binding->m_size_; l++) {
                     auto& field = schema_enum_binding->m_enum_info_[l];
 
@@ -100,7 +98,7 @@ namespace sdk {
         }
 
         void WriteTypeJson(codegen::generator_t::self_ref builder, CSchemaType* current_type) {
-            builder.begin_json_object().json_key("name").json_string(current_type->m_name_);
+            builder.begin_json_object_value().json_key("name").json_string(current_type->m_name_);
             
             builder.json_key("category").json_literal(current_type->type_category);
 
@@ -243,7 +241,7 @@ namespace sdk {
             } while (did_change);
             // ==================
 
-            builder.json_key("classes").begin_json_object();
+            builder.json_key("classes").begin_json_object_value();
 
             for (auto& class_dump : classes_to_dump) {
                 // @note: @es3n1n: get class info, assemble it
@@ -260,12 +258,12 @@ namespace sdk {
 
                 // @note: @es3n1n: start class
                 //
-                builder.json_key(class_info->m_name).begin_json_object();
+                builder.json_key(class_info->m_name).begin_json_object_value();
 
                 if (!parent_cls_name.empty())
                     builder.json_key("parent").json_string(parent_cls_name);
 
-                builder.json_key("fields").begin_json_array();
+                builder.json_key("fields").begin_json_array_value();
 
                 // @note: @es3n1n: begin public members
                 //
@@ -326,7 +324,7 @@ namespace sdk {
 
                     WriteTypeJson(builder, field->m_type);
 
-                    builder.json_key("metadata").begin_json_object();
+                    builder.json_key("metadata").begin_json_object_value();
 
                     for (auto j = 0; j < field->m_metadata_size; j++) {
                         auto field_metadata = field->m_metadata[j];
@@ -352,7 +350,7 @@ namespace sdk {
         }
     } // namespace
 
-    void GenerateTypeScopeSdk(CSchemaSystemTypeScope* current) {
+    void GenerateTypeScopeSdk(CSchemaSystemTypeScope* current, const char* outDirName) {
         // @note: @es3n1n: getting current scope name & formatting it
         //
         constexpr std::string_view dll_extension = ".dll";
@@ -360,15 +358,11 @@ namespace sdk {
         if (ends_with(scope_name.data(), dll_extension.data()))
             scope_name.remove_suffix(dll_extension.size());
 
-        // @note: @es3n1n: print debug info
-        //
-        std::cout << std::format("{}: Assembling {}", __FUNCTION__, scope_name) << std::endl;
-
         // @note: @es3n1n: build file path
         //
-        if (!std::filesystem::exists(kOutDirName))
-            std::filesystem::create_directories(kOutDirName);
-        const std::string out_file_path = std::format("{}\\{}.json", kOutDirName, scope_name);
+        if (!std::filesystem::exists(outDirName))
+            std::filesystem::create_directories(outDirName);
+        const std::string out_file_path = std::format("{}\\{}.json", outDirName, scope_name);
 
         // @note: @es3n1n: init codegen
         //
@@ -381,14 +375,14 @@ namespace sdk {
 
         // @note: @es3n1n: print banner
         //
-        builder.push_line("{");
+        builder.begin_json_object();
 
         // @note: @es3n1n: assemble props
         //
         AssembleEnums(builder, current_enums);
         AssembleClasses(current, builder, current_classes);
 
-        builder.push_line("}");
+        builder.end_json_object(false);
 
         // @note: @es3n1n: write generated data to output file
         //

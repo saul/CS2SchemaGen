@@ -112,25 +112,6 @@ namespace field_parser {
             return result;
         }
 
-        __forceinline void parse_bitfield(field_info_t& result, const std::string& type_name) {
-            // @note: @es3n1n: in source2 schema, every bitfield var name would start with the "bitfield:" prefix
-            // so if there's no such prefix we would just skip the bitfield parsing.
-            if (type_name.size() < kBitfieldTypePrefix.size())
-                return;
-
-            if (const auto s = type_name.substr(0, kBitfieldTypePrefix.size()); s != kBitfieldTypePrefix.data())
-                return;
-
-            // @note: @es3n1n: type_name starts with the "bitfield:" prefix,
-            // now we can parse the bitfield size
-            const auto bitfield_size_str = type_name.substr(kBitfieldTypePrefix.size(), type_name.size() - kBitfieldTypePrefix.size());
-            const auto bitfield_size = wrapped_atoi(bitfield_size_str.data());
-
-            // @note: @es3n1n: saving parsed value
-            result.m_bitfield_size = bitfield_size;
-            result.m_type = codegen::guess_bitfield_type(bitfield_size);
-        }
-
         // @note: @es3n1n: we are assuming that this function would be executed right after
         // the bitfield/array parsing and the type would be already set if item is a bitfield
         // or array
@@ -156,7 +137,6 @@ namespace field_parser {
 
         std::copy(array_sizes.begin(), array_sizes.end(), std::back_inserter(result.m_array_sizes));
 
-        detail::parse_bitfield(result, type_name);
         detail::parse_type(result, type_name);
 
         return result;

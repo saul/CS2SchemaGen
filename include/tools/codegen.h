@@ -12,33 +12,6 @@ namespace codegen {
     constexpr std::size_t kTabsPerBlock = 2; // @note: @es3n1n: how many characters shall we place per each block
     constexpr std::initializer_list<char> kBlacklistedCharacters = {':', ';', '\\', '/'};
 
-    // @note: @es3n1n: a list of possible integral types for bitfields (would be used in `guess_bitfield_type`)
-    //
-    // clang-format off
-    constexpr std::initializer_list<std::pair<std::size_t, std::string_view>> kBitfieldIntegralTypes = {
-        {8, "uint8_t"},
-        {16, "uint16_t"},
-        {32, "uint32_t"},
-        {64, "uint64_t"},
-
-        // @todo: @es3n1n: define uint128_t/uint256_t/... as custom structs in the very beginning of the file
-        {128, "uint128_t"},
-        {256, "uint256_t"},
-        {512, "uint512_t"},
-    };
-    // clang-format on
-
-    inline std::string guess_bitfield_type(const std::size_t bits_count) {
-        for (auto p : kBitfieldIntegralTypes) {
-            if (bits_count > p.first)
-                continue;
-
-            return p.second.data();
-        }
-
-        throw std::runtime_error(std::format("{} : Unable to guess bitfield type with size {}", __FUNCTION__, bits_count));
-    }
-
     struct generator_t {
         using self_ref = std::add_lvalue_reference_t<generator_t>;
     public:
@@ -48,124 +21,47 @@ namespace codegen {
             return v;
         }
     public:
-        self_ref next_line() {
-            return push_line("");
-        }
-
         self_ref begin_json_object() {
-            return begin_block("");
-        }
-
-        self_ref end_json_object() {
-            return end_block();
-        }
-
-        self_ref begin_json_array(bool increment_tabs_count = true, bool move_cursor_to_next_line = true) {
-            // @note: @es3n1n: we should reset tabs count if we aren't moving cursor to
-            // the next line
-            auto backup_tabs_count = _tabs_count;
-            if (!move_cursor_to_next_line)
-                _tabs_count = 0;
-
-            push_line("[", move_cursor_to_next_line);
-
-            // @note: @es3n1n: restore tabs count
-            if (!move_cursor_to_next_line)
-                _tabs_count = backup_tabs_count;
-
-            if (increment_tabs_count)
-                inc_tabs_count(kTabsPerBlock);
-
+            push_line("{");
+            inc_tabs_count(kTabsPerBlock);
             return *this;
         }
 
-        self_ref end_json_array(bool decrement_tabs_count = true, bool move_cursor_to_next_line = true) {
-            if (decrement_tabs_count)
-                dec_tabs_count(kTabsPerBlock);
+        self_ref begin_json_object_value() {
+            _stream << "{" << std::endl;
+            inc_tabs_count(kTabsPerBlock);
+            return *this;
+        }
 
+        self_ref end_json_object(bool write_comma = true) {
+            dec_tabs_count(kTabsPerBlock);
+            if (write_comma)
+                push_line("},");
+            else
+                push_line("}");
+            return *this;
+        }
+
+        self_ref begin_json_array() {
+            push_line("[");
+            inc_tabs_count(kTabsPerBlock);
+            return *this;
+        }
+
+        self_ref begin_json_array_value() {
+            _stream << "[" << std::endl;
+            inc_tabs_count(kTabsPerBlock);
+            return *this;
+        }
+
+        self_ref end_json_array() {
+            dec_tabs_count(kTabsPerBlock);
             push_line("],");
-            if (move_cursor_to_next_line)
-                next_line();
-
             return *this;
         }
 
-        self_ref begin_block(const std::string& text, bool increment_tabs_count = true,
-                             bool move_cursor_to_next_line = true) {
-            push_line(text, move_cursor_to_next_line);
-
-            // @note: @es3n1n: we should reset tabs count if we aren't moving cursor to
-            // the next line
-            auto backup_tabs_count = _tabs_count;
-            if (!move_cursor_to_next_line)
-                _tabs_count = 0;
-
-            push_line("{", move_cursor_to_next_line);
-
-            // @note: @es3n1n: restore tabs count
-            if (!move_cursor_to_next_line)
-                _tabs_count = backup_tabs_count;
-
-            if (increment_tabs_count)
-                inc_tabs_count(kTabsPerBlock);
-
-            return *this;
-        }
-
-        self_ref end_block(bool decrement_tabs_count = true, bool move_cursor_to_next_line = true) {
-            if (decrement_tabs_count)
-                dec_tabs_count(kTabsPerBlock);
-
-            push_line("},");
-            if (move_cursor_to_next_line)
-                next_line();
-
-            return *this;
-        }
-
-        self_ref begin_class(const std::string& class_name) {
-            return begin_block(std::format("public partial class {}", class_name));
-        }
-
-        self_ref begin_class_with_base_type(const std::string& class_name, const std::string& base_type) {
-            if (base_type.empty())
-                return begin_class(std::cref(class_name));
-
-            return begin_block(std::format("public partial class {} : {}", class_name, base_type));
-        }
-
-        self_ref end_class() {
-            return end_block();
-        }
-
-        self_ref push_using(const std::string& namespace_name) {
-            return push_line(std::format("using {};", namespace_name));
-        }
-
-        self_ref push_namespace(const std::string& namespace_name) {
-            return push_line(std::format("namespace {};", namespace_name))
-                .next_line();
-        }
-
-        self_ref begin_enum(const std::string& enum_name, const std::string& base_typename = "") {
-            return begin_block(std::format("public enum {}{}", escape_name(enum_name), base_typename.empty() ? base_typename : (" : " + base_typename)));
-        }
-
-        self_ref end_enum() {
-            return end_block();
-        }
-
-        template <typename T>
-        self_ref enum_item(const std::string& name, T value) {
-            return push_line(std::vformat(sizeof(T) >= 4 ? "{} = {:#x}," : "{} = {},", std::make_format_args(name, value)));
-        }
-
-        self_ref comment(const std::string& text, const bool move_cursor_to_next_line = true) {
-            return push_line(std::format("// {}", text), move_cursor_to_next_line);
-        }
-
-        self_ref prop(const std::string& type_name, const std::string& name) {
-            return push_line(std::format("public {} {} {{ get; internal set; }}", type_name, name));
+        self_ref comment(const std::string& text) {
+            return push_line(std::format("// {}", text));
         }
 
         self_ref json_key(const std::string& str) {
@@ -173,12 +69,14 @@ namespace codegen {
         }
 
         self_ref json_string(const std::string& str) {
-            return push_line("\"" + escape_json_string(str) + "\",");
+            _stream << "\"" + escape_json_string(str) + "\"," << std::endl;
+            return *this;
         }
 
         template <typename T>
         self_ref json_literal(T value) {
-            return push_line(std::format("{},", value));
+            _stream << std::format("{},", value) << std::endl;
+            return *this;
         }
 
     public:
