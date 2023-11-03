@@ -1,0 +1,4 @@
+[submodule "cs2sdk"]
+	path = src/cs2sdk
+	url = https://github.com/alliedmodders/hl2sdk.git
+	branch = cs2
