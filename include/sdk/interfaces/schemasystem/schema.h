@@ -136,7 +136,7 @@ public:
     std::int32_t m_i_unk1_; // 0x0040
 };
 
-enum SchemaClassFlags_t {
+enum SchemaClassFlags_t : unsigned char {
     SCHEMA_CLASS_HAS_VIRTUAL_MEMBERS = 1,
     SCHEMA_CLASS_IS_ABSTRACT = 2,
     SCHEMA_CLASS_HAS_TRIVIAL_CONSTRUCTOR = 4,
@@ -203,9 +203,15 @@ public:
         CSchemaType* element_type_;
     };
 
+    struct generic_type_t {
+        uint64_t unknown;
+        const char* m_name_; // 0x0008
+    };
+
     struct atomic_t { // same goes for CollectionOfT
-        uint64_t gap[2];
-        CSchemaType* template_typename;
+        generic_type_t* generic_type;
+        uint64_t unknown;
+        CSchemaType* template_type;
     };
 
     struct atomic_tt {
@@ -290,7 +296,7 @@ struct SchemaClassInfoData_t {
     SchemaMetadataSetData_t* m_metadata; // 0x0048
     CSchemaSystemTypeScope* m_type_scope; // 0x0050
     CSchemaType* m_shema_type; // 0x0058
-    SchemaClassFlags_t m_class_flags:8; // 0x0060
+    SchemaClassFlags_t m_class_flags; // 0x0060
 };
 
 class CSchemaClassInfo : public SchemaClassInfoData_t {

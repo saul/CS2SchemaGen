@@ -51,8 +51,9 @@ namespace source2_gen {
         // @note: @es3n1n: Obtaining type scopes and generating sdk
         //
         const auto type_scopes = sdk::g_schema->GetTypeScopes();
-        for (auto i = 0; i < type_scopes.Count(); ++i)
+        for (auto i = 0; i < type_scopes.Count(); ++i) {
             sdk::GenerateTypeScopeSdk(type_scopes.m_pElements[i]);
+        }
 
         // @note: @es3n1n: Generating sdk for global type scope
         //

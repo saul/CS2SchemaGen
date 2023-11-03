@@ -43,19 +43,33 @@ namespace field_parser {
             std::string result;
 
             for (std::size_t size : m_array_sizes)
-                result += std::format("[{}]", size);
+                result += std::format("[]");
+
+            return result;
+        }
+
+        std::string formatted_type() const {
+            std::string result = m_type;
+
+            replace_all(result, "*", "?");
+
+            if (is_array())
+                result = std::format("{}{}", result, formatted_array_sizes());
 
             return result;
         }
 
         std::string formatted_name() const {
-            if (is_bitfield())
-                return std::format("{}: {}", m_name, m_bitfield_size);
-
-            if (is_array())
-                return std::format("{}{}", m_name, formatted_array_sizes());
-
             return m_name;
+        }
+
+    private:
+        void replace_all(std::string& str, const std::string& from, const std::string& to) const {
+            size_t start_pos = 0;
+            while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+                str.replace(start_pos, from.length(), to);
+                start_pos += to.length();
+            }
         }
     };
 
@@ -69,19 +83,19 @@ namespace field_parser {
             constexpr std::string_view kArraySizePostfix = "]"sv;
 
             // clang-format off
-            constexpr std::initializer_list<std::pair<std::string_view, std::string_view>> kTypeNameToCpp = {
+            constexpr std::initializer_list<std::pair<std::string_view, std::string_view>> kTypeNameToCs = {
                 {"float32"sv, "float"sv}, 
                 {"float64"sv, "double"sv},
     
-                {"int8"sv, "int8_t"sv},   
-                {"int16"sv, "int16_t"sv},   
-                {"int32"sv, "int32_t"sv},   
-                {"int64"sv, "int64_t"sv},
+                {"int8"sv, "sbyte"sv},   
+                {"int16"sv, "short"sv},   
+                {"int32"sv, "int"sv},   
+                {"int64"sv, "long"sv},
     
-                {"uint8"sv, "uint8_t"sv}, 
-                {"uint16"sv, "uint16_t"sv}, 
-                {"uint32"sv, "uint32_t"sv}, 
-                {"uint64"sv, "uint64_t"sv}
+                {"uint8"sv, "byte"sv}, 
+                {"uint16"sv, "ushort"sv}, 
+                {"uint32"sv, "uint"sv}, 
+                {"uint64"sv, "ulong"sv}
             };
             // clang-format on
         } // namespace
@@ -126,7 +140,7 @@ namespace field_parser {
                 result.m_type = type_name;
 
             // @note: @es3n1n: applying kTypeNameToCpp rules
-            for (auto& rule : kTypeNameToCpp) {
+            for (auto& rule : kTypeNameToCs) {
                 if (result.m_type != rule.first)
                     continue;
 
