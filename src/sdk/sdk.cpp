@@ -6,24 +6,54 @@
 namespace {
     using namespace std::string_view_literals;
 
-    constexpr std::initializer_list<fnv32::hash> kStringMetadataEntries = {
-        FNV32("MNetworkChangeCallback"),  FNV32("MPropertyFriendlyName"), FNV32("MPropertyDescription"),
-        FNV32("MPropertyAttributeRange"), FNV32("MPropertyStartGroup"),   FNV32("MPropertyAttributeChoiceName"),
-        FNV32("MPropertyGroupName"),      FNV32("MNetworkUserGroup"),     FNV32("MNetworkAlias"),
-        FNV32("MNetworkTypeAlias"),       FNV32("MNetworkSerializer"),    FNV32("MPropertyAttributeEditor"),
-        FNV32("MPropertySuppressExpr"),   FNV32("MKV3TransferName"),      FNV32("MNetworkEncoder"),
-        FNV32("MNetworkSendProxyRecipientsFilter")
+    constinit std::array string_metadata_entries = {FNV32("MNetworkChangeCallback"),
+                                                    FNV32("MPropertyFriendlyName"),
+                                                    FNV32("MPropertyDescription"),
+                                                    FNV32("MPropertyAttributeRange"),
+                                                    FNV32("MPropertyStartGroup"),
+                                                    FNV32("MPropertyAttributeChoiceName"),
+                                                    FNV32("MPropertyGroupName"),
+                                                    FNV32("MNetworkUserGroup"),
+                                                    FNV32("MNetworkAlias"),
+                                                    FNV32("MNetworkTypeAlias"),
+                                                    FNV32("MNetworkSerializer"),
+                                                    FNV32("MPropertyAttributeEditor"),
+                                                    FNV32("MPropertySuppressExpr"),
+                                                    FNV32("MKV3TransferName"),
+                                                    FNV32("MFieldVerificationName"),
+                                                    FNV32("MVectorIsSometimesCoordinate"),
+                                                    FNV32("MNetworkEncoder"),
+                                                    FNV32("MPropertyCustomFGDType"),
+                                                    FNV32("MVDataUniqueMonotonicInt"),
+                                                    FNV32("MScriptDescription")};
+
+    constinit std::array string_class_metadata_entries = {
+        FNV32("MResourceTypeForInfoType"),
     };
 
-    constexpr std::initializer_list<fnv32::hash> kIntegerMetadataEntries = {
+    constinit std::array var_name_string_class_metadata_entries = {
+        FNV32("MNetworkVarNames"),
+        FNV32("MNetworkOverride"),
+        FNV32("MNetworkVarTypeOverride"),
+    };
+
+    constinit std::array var_string_class_metadata_entries = {
+        FNV32("MPropertyArrayElementNameKey"), FNV32("MPropertyFriendlyName"),      FNV32("MPropertyDescription"),
+        FNV32("MNetworkExcludeByName"),        FNV32("MNetworkExcludeByUserGroup"), FNV32("MNetworkIncludeByName"),
+        FNV32("MNetworkIncludeByUserGroup"),   FNV32("MNetworkUserGroupProxy"),     FNV32("MNetworkReplayCompatField"),
+    };
+
+    constinit std::array integer_metadata_entries = {
         FNV32("MNetworkVarEmbeddedFieldOffsetDelta"),
         FNV32("MNetworkBitCount"),
         FNV32("MNetworkPriority"),
         FNV32("MPropertySortPriority"),
-        FNV32("MNetworkEncodeFlags")
+        FNV32("MParticleMinVersion"),
+        FNV32("MParticleMaxVersion"),
+        FNV32("MNetworkEncodeFlags"),
     };
 
-    constexpr std::initializer_list<fnv32::hash> kFloatMetadataEntries = {
+    constinit std::array float_metadata_entries = {
         FNV32("MNetworkMinValue"),
         FNV32("MNetworkMaxValue"),
     };
@@ -44,7 +74,7 @@ namespace sdk {
                 const auto get_type_name = [schema_enum_binding]() [[msvc::forceinline]] {
                     std::string type_storage;
 
-                    switch (schema_enum_binding->m_align_) {
+                    switch (schema_enum_binding->m_align) {
                     case 1:
                         type_storage = "byte";
                         break;
@@ -70,16 +100,14 @@ namespace sdk {
 
                 // @note: @es3n1n: begin enum class
                 //
-                builder.json_key(schema_enum_binding->m_binding_name_).begin_json_object_value();
+                builder.json_key(schema_enum_binding->m_name).begin_json_object_value();
 
-                builder.json_key("align").json_literal(schema_enum_binding->m_align_);
+                builder.json_key("align").json_literal(schema_enum_binding->m_align);
 
                 // @note: @es3n1n: assemble enum items
                 //
                 builder.json_key("items").begin_json_array_value();
-                for (auto l = 0; l < schema_enum_binding->m_size_; l++) {
-                    auto& field = schema_enum_binding->m_enum_info_[l];
-
+                for (const auto& field : schema_enum_binding->GetEnumeratorValues()) {
                     builder.begin_json_object()
                         .json_key("name")
                         .json_string(field.m_name)
@@ -111,7 +139,7 @@ namespace sdk {
 
                 if (current_type->atomic_category == Atomic_T || current_type->atomic_category == Atomic_CollectionOfT) {
                     builder.json_key("inner");
-                    WriteTypeJson(builder, current_type->m_atomic_t_.template_type);
+                    WriteTypeJson(builder, current_type->m_atomic_t_.template_typename);
                 }
             } else if (current_type->type_category == Schema_FixedArray) {
                 builder.json_key("arraySize").json_literal(current_type->m_array_.array_size);
@@ -130,11 +158,11 @@ namespace sdk {
                 CSchemaClassInfo* target_;
                 std::set<CSchemaClassInfo*> refs_;
 
-                CSchemaClassInfo* GetParent() {
-                    if (!target_->m_schema_parent)
+                [[nodiscard]] CSchemaClassInfo* GetParent() const {
+                    if (!target_->m_base_classes)
                         return nullptr;
 
-                    return target_->m_schema_parent->m_class;
+                    return target_->m_base_classes->m_prev_by_class;
                 }
 
                 void AddRefToClass(CSchemaType* type) {
@@ -166,7 +194,7 @@ namespace sdk {
                 }
 
                 SchemaClassFieldData_t* GetFirstField() {
-                    if (target_->m_align)
+                    if (target_->m_fields_size > 0)
                         return &target_->m_fields[0];
                     return nullptr;
                 }
@@ -186,12 +214,12 @@ namespace sdk {
             std::list<class_t> classes_to_dump;
 
             for (const auto schema_class_binding : classes.GetElements()) {
-                const auto class_info = current->FindDeclaredClass(schema_class_binding->m_binary_name);
+                const auto class_info = current->FindDeclaredClass(schema_class_binding->m_name);
 
                 auto& class_dump = classes_to_dump.emplace_back();
                 class_dump.target_ = class_info;
 
-                for (auto k = 0; k < class_info->m_align; k++) {
+                for (auto k = 0; k < class_info->m_fields_size; k++) {
                     const auto field = &class_info->m_fields[k];
                     if (!field)
                         continue;
@@ -252,7 +280,7 @@ namespace sdk {
                 // @note: @es3n1n: get parent name
                 //
                 std::string parent_cls_name;
-                if (auto parent = class_info->m_schema_parent ? class_info->m_schema_parent->m_class : nullptr; parent) {
+                if (auto parent = class_info->m_base_classes ? class_info->m_base_classes->m_prev_by_class : nullptr; parent) {
                     parent_cls_name = parent->m_name;
                 }
 
@@ -263,80 +291,106 @@ namespace sdk {
                 if (!parent_cls_name.empty())
                     builder.json_key("parent").json_string(parent_cls_name);
 
+                auto write_metadata_json = [&](const SchemaMetadataEntryData_t metadata_entry) -> void {
+                    std::string value;
+
+                    const auto value_hash_name = fnv32::hash_runtime(metadata_entry.m_name);
+
+                    builder.begin_json_object();
+                    builder.json_key("name").json_string(metadata_entry.m_name);
+
+                    if (strcmp(metadata_entry.m_name, "MResourceTypeForInfoType") == 0) {
+                        builder.end_json_object();
+                        return;
+                    }
+
+                    // clang-format off
+                    if (std::find(var_name_string_class_metadata_entries.begin(), var_name_string_class_metadata_entries.end(), value_hash_name) != var_name_string_class_metadata_entries.end())
+                    {
+                        builder.json_key("value").begin_json_object_value();
+
+                        const auto &var_value = metadata_entry.m_value->m_var_value;
+                        if (var_value.m_type)
+                            builder.json_key("type").json_string(var_value.m_type);
+                        if (var_value.m_name)
+                            builder.json_key("name").json_string(var_value.m_name);
+
+                        builder.end_json_object();
+                    }
+                    else if (std::find(string_class_metadata_entries.begin(), string_class_metadata_entries.end(), value_hash_name) != string_class_metadata_entries.end())
+                        builder.json_key("value").json_string(metadata_entry.m_value->m_sz_value.data());
+                    else if (std::find(var_string_class_metadata_entries.begin(), var_string_class_metadata_entries.end(), value_hash_name) != var_string_class_metadata_entries.end())
+                        builder.json_key("value").json_string(metadata_entry.m_value->m_p_sz_value);
+                    else if (std::find(string_metadata_entries.begin(), string_metadata_entries.end(), value_hash_name) != string_metadata_entries.end())
+                        builder.json_key("value").json_string(metadata_entry.m_value->m_p_sz_value);
+                    else if (std::find(integer_metadata_entries.begin(), integer_metadata_entries.end(), value_hash_name) != integer_metadata_entries.end())
+                        builder.json_key("value").json_literal(metadata_entry.m_value->m_n_value);
+                    else if (std::find(float_metadata_entries.begin(), float_metadata_entries.end(), value_hash_name) != float_metadata_entries.end())
+                        builder.json_key("value").json_literal(metadata_entry.m_value->m_f_value);
+                    // clang-format on
+
+                    builder.end_json_object();
+                };
+
+                bool is_atomic = false;
+                std::set<std::string> network_var_names;
+                builder.json_key("metadata").begin_json_array_value();
+                for (const auto& metadata : class_info->GetStaticMetadata()) {
+                    if (strcmp(metadata.m_name, "MNetworkVarNames") == 0) {
+                        // Keep track of all network vars
+                        network_var_names.insert(metadata.m_value->m_var_value.m_name);
+
+                        // don't write var names - too verbose
+                        continue;
+                    }
+                    
+                    if (strcmp(metadata.m_name, "MNetworkVarsAtomic") == 0)
+                    {
+                        is_atomic = true;
+                    }
+
+                    write_metadata_json(metadata);
+                }
+                builder.end_json_array();
+
                 builder.json_key("fields").begin_json_array_value();
+
+                if (strcmp(class_info->m_name, "ServerAuthoritativeWeaponSlot_t") == 0) {
+                    builder.str();
+                }
 
                 // @note: @es3n1n: begin public members
                 //
-                for (auto k = 0; k < class_info->m_align; k++) {
-                    const auto field = &class_info->m_fields[k];
-                    if (!field)
-                        continue;
-
-                    // @note: @es3n1n: some more utils
-                    //
-                    auto get_metadata_type = [&](SchemaMetadataEntryData_t metadata_entry) -> std::string {
-                        std::string value;
-
-                        const auto value_hash_name = fnv32::hash_runtime(metadata_entry.m_name);
-
-                        // clang-format off
-                        if (std::find(kStringMetadataEntries.begin(), kStringMetadataEntries.end(), value_hash_name) != kStringMetadataEntries.end() && metadata_entry.m_value->m_sz_value != nullptr)
-                            value = metadata_entry.m_value->m_sz_value;
-                        else if (std::find(kIntegerMetadataEntries.begin(), kIntegerMetadataEntries.end(), value_hash_name) != kIntegerMetadataEntries.end())
-                            value = std::to_string(metadata_entry.m_value->m_n_value);
-                        else if (std::find(kFloatMetadataEntries.begin(), kFloatMetadataEntries.end(), value_hash_name) != kFloatMetadataEntries.end())
-                            value = std::to_string(metadata_entry.m_value->m_f_value);
-                        // clang-format on
-
-                        return value;
-                    };
-
-                    // @note: @es3n1n: obtaining size
-                    //
-                    int field_size = 0;
-                    if (!field->m_type->GetSize(&field_size)) // @note: @es3n1n: should happen if we are attempting to get a size of the bitfield
-                        field_size = 0;
-
-                    // @note: @es3n1n: dump metadata
-                    //
-                    auto is_network_enable = strcmp(class_info->m_name, "ServerAuthoritativeWeaponSlot_t") == 0;
-                    for (auto j = 0; j < field->m_metadata_size; j++) {
-                        auto field_metadata = field->m_metadata[j];
-
-                        if (strcmp(field_metadata.m_name, "MNetworkDisable") == 0) {
-                            is_network_enable = false;
-                            break;
+                for (const auto& field : class_info->GetFields()) {
+                    if (!network_var_names.contains(field.m_name) && !is_atomic) {
+                        bool is_network_enable = strcmp(class_info->m_name, "ServerAuthoritativeWeaponSlot_t") == 0;
+                        for (auto j = 0; j < field.m_metadata_size; j++) {
+                            if (strcmp(field.m_metadata[j].m_name, "MNetworkEnable") == 0) {
+                                is_network_enable = true;
+                                break;
+                            }
                         }
 
-                        if (strstr(field_metadata.m_name, "MNetwork") == field_metadata.m_name) {
-                            is_network_enable = true;
-                            break;
+                        if (!is_network_enable) {
+                            continue;
                         }
                     }
 
-                    if (!is_network_enable) {
-                        continue;
-                    }
-
-                    builder.begin_json_object().json_key("name").json_string(field->m_name);
+                    builder.begin_json_object().json_key("name").json_string(field.m_name);
 
                     builder.json_key("type");
 
-                    WriteTypeJson(builder, field->m_type);
+                    WriteTypeJson(builder, field.m_type);
 
-                    builder.json_key("metadata").begin_json_object_value();
+                    builder.json_key("metadata").begin_json_array_value();
 
-                    for (auto j = 0; j < field->m_metadata_size; j++) {
-                        auto field_metadata = field->m_metadata[j];
-
-                        if (strcmp(field_metadata.m_name, "MNetworkEnable") == 0)
-                            continue;
-
-                        auto data = get_metadata_type(field_metadata);
-                        builder.json_key(field_metadata.m_name).json_string(data);
+                    for (auto j = 0; j < field.m_metadata_size; j++) {
+                        if (strcmp(field.m_metadata[j].m_name, "MNetworkEnable")) {
+                            write_metadata_json(field.m_metadata[j]);
+                        }
                     }
 
-                    builder.end_json_object();
+                    builder.end_json_array();
 
                     builder.end_json_object();
                 }
