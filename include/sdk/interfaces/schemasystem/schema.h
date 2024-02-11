@@ -7,8 +7,10 @@
 #define CSCHEMATYPE_GETSIZES_INDEX 3
 #define CSCHEMASYSTEM_VALIDATECLASSES 35
 #define SCHEMASYSTEM_TYPE_SCOPES_OFFSET 0x190
-#define SCHEMASYSTEMTYPESCOPE_OFF1 0x47E
+#define SCHEMASYSTEMTYPESCOPE_OFF1 0x4B0
 #define SCHEMASYSTEMTYPESCOPE_OFF2 0x2808
+#define SCHEMASYSTEMTYPESCOPE_TYPE_DECLAREDCLASS_INDEX 14
+#define SCHEMASYSTEMTYPESCOPE_TYPE_DECLAREDENUM_INDEX 15
 #define SCHEMASYSTEM_FIND_DECLARED_CLASS_TYPE 2
 
 class ISaveRestoreOps;
@@ -536,11 +538,13 @@ public:
     }
 
     CSchemaSystemTypeScope* FindTypeScopeForModule(const char* module_name) {
-        return Virtual::Get<CSchemaSystemTypeScope*(__thiscall*)(void*, const char*, void*)>(this, 13)(this, module_name, nullptr);
+        return Virtual::Get<CSchemaSystemTypeScope*(__thiscall*)(void*, const char*, void*)>(this, SCHEMASYSTEMTYPESCOPE_TYPE_DECLAREDCLASS_INDEX)(
+            this, module_name, nullptr);
     }
 
     CSchemaSystemTypeScope* GetTypeScopeForBinding(const SchemaTypeScope_t type, const char* binding) {
-        return Virtual::Get<CSchemaSystemTypeScope*(__thiscall*)(void*, SchemaTypeScope_t, const char*)>(this, 14)(this, type, binding);
+        return Virtual::Get<CSchemaSystemTypeScope*(__thiscall*)(void*, SchemaTypeScope_t, const char*)>(
+            this, SCHEMASYSTEMTYPESCOPE_TYPE_DECLAREDENUM_INDEX)(this, type, binding);
     }
 
     const char* GetClassInfoBinaryName(CSchemaClassBinding* class_info) {
