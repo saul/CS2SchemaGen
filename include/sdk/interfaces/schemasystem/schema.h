@@ -40,7 +40,7 @@ enum SchemaClassFlags_t {
     SCHEMA_CF1_IS_SCHEMA_VALIDATED = 2048,
 };
 
-enum ETypeCategory {
+enum ETypeCategory : std::uint8_t {
     Schema_Builtin = 0,
     Schema_Ptr = 1,
     Schema_Bitfield = 2,
@@ -51,13 +51,15 @@ enum ETypeCategory {
     Schema_None = 7
 };
 
-enum EAtomicCategory {
-    Atomic_Basic,
-    Atomic_T,
-    Atomic_CollectionOfT,
-    Atomic_TT,
-    Atomic_I,
-    Atomic_None
+enum EAtomicCategory : std::uint8_t {
+    Atomic_Basic = 0,
+    Atomic_T = 1,
+    Atomic_CollectionOfT = 2,
+    Atomic_TF = 3,
+    Atomic_TT = 4,
+    Atomic_TTF = 5,
+    Atomic_I = 6,
+    Atomic_None = 7
 };
 
 // Registered binary: schemasystem.dll (project 'schemasystem')
@@ -143,7 +145,8 @@ enum class fieldtype_t : uint8_t {
     FIELD_ENGINE_TIME = 0x4c,
     FIELD_ENGINE_TICK = 0x4d,
     FIELD_WORLD_GROUP_ID = 0x4e,
-    FIELD_TYPECOUNT = 0x4f,
+    FIELD_GLOBALSYMBOL = 0x4f,
+    FIELD_TYPECOUNT = 0x50,
 };
 
 struct CSchemaVarName {
@@ -522,7 +525,7 @@ private:
     std::array<char, 256> m_name_ = {};
     char pad_0x0108[SCHEMASYSTEMTYPESCOPE_OFF1] = {}; // 0x0108
     CUtlTSHash<CSchemaClassBinding*> m_classes_; // 0x0588
-    char pad_0x0594[SCHEMASYSTEMTYPESCOPE_OFF2] = {}; // 0x05C8
+    //char pad_0x0594[SCHEMASYSTEMTYPESCOPE_OFF2] = {}; // 0x05C8
     CUtlTSHash<CSchemaEnumBinding*> m_enumes_; // 0x2DD0
 };
 
