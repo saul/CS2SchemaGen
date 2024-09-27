@@ -7,14 +7,12 @@
 
 void SchemaDumpAll(const char* outDirName)
 {
-    sdk::g_schema = CSchemaSystem::GetInstance();
-    if (!sdk::g_schema)
-        throw std::runtime_error(std::format("Unable to obtain Schema interface"));
+    const auto schemaSystem = (CSchemaSystem*)g_pSchemaSystem;
 
-    const auto type_scopes = sdk::g_schema->GetTypeScopes();
-    for (auto i = 0; i < type_scopes.Count(); ++i) {
-        sdk::GenerateTypeScopeSdk(type_scopes.m_pElements[i], outDirName);
+    const auto& type_scopes = schemaSystem->m_TypeScopes;
+    for (auto i = 0; i < type_scopes.GetNumStrings(); ++i) {
+        sdk::GenerateTypeScopeSdk(type_scopes[i], outDirName);
     }
 
-    sdk::GenerateTypeScopeSdk(sdk::g_schema->GlobalTypeScope(), outDirName);
+    sdk::GenerateTypeScopeSdk(schemaSystem->GlobalTypeScope(), outDirName);
 }

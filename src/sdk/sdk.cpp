@@ -6,6 +6,22 @@
 namespace {
     using namespace std::string_view_literals;
 
+    struct CSchemaVarName {
+        const char* m_name;
+        const char* m_type;
+    };
+
+    struct CSchemaNetworkValue {
+        union {
+            const char* m_p_sz_value;
+            int m_n_value;
+            float m_f_value;
+            std::uintptr_t m_p_value;
+            CSchemaVarName m_var_value;
+            std::array<char, 32> m_sz_value;
+        };
+    };
+
     constinit std::array string_metadata_entries = {FNV32("MNetworkChangeCallback"),
                                                     FNV32("MPropertyFriendlyName"),
                                                     FNV32("MPropertyDescription"),
@@ -65,16 +81,21 @@ namespace {
 
 namespace sdk {
     namespace {
-        void AssembleEnums(codegen::generator_t::self_ref builder, CUtlTSHash<CSchemaEnumBinding*> enums) {
+        void AssembleEnums(codegen::generator_t::self_ref builder, CUtlTSHash<CSchemaEnumInfo*, 256, uint>& enums) {
             builder.json_key("enums").begin_json_object_value();
 
-            for (auto schema_enum_binding : enums.GetElements()) {
+            UtlTSHashHandle_t* handles = new UtlTSHashHandle_t[enums.Count()];
+            enums.GetElements(0, enums.Count(), handles);
+
+            for (int i = 0; i < enums.Count(); ++i) {
+                auto schema_enum_binding = enums[handles[i]];
+
                 // @note: @es3n1n: get type name by align size
                 //
                 const auto get_type_name = [schema_enum_binding]() [[msvc::forceinline]] {
                     std::string type_storage;
 
-                    switch (schema_enum_binding->m_align) {
+                    switch (schema_enum_binding->m_nAlignment) {
                     case 1:
                         type_storage = "byte";
                         break;
@@ -100,19 +121,20 @@ namespace sdk {
 
                 // @note: @es3n1n: begin enum class
                 //
-                builder.json_key(schema_enum_binding->m_name).begin_json_object_value();
+                builder.json_key(schema_enum_binding->m_pszName).begin_json_object_value();
 
-                builder.json_key("align").json_literal(schema_enum_binding->m_align);
+                builder.json_key("align").json_literal(schema_enum_binding->m_nAlignment);
 
                 // @note: @es3n1n: assemble enum items
                 //
                 builder.json_key("items").begin_json_array_value();
-                for (const auto& field : schema_enum_binding->GetEnumeratorValues()) {
+                for (int enumIdx = 0; enumIdx < schema_enum_binding->m_nEnumeratorCount; ++enumIdx) { 
+                    const auto& field = schema_enum_binding->m_pEnumerators[enumIdx];
                     builder.begin_json_object()
                         .json_key("name")
-                        .json_string(field.m_name)
+                        .json_string(field.m_pszName)
                         .json_key("value")
-                        .json_literal(field.m_value == std::numeric_limits<std::size_t>::max() ? -1 : field.m_value)
+                        .json_literal(field.m_nValue == std::numeric_limits<int64>::max() ? -1 : field.m_nValue)
                         .end_json_object();
                 }
                 builder.end_json_array();
@@ -126,48 +148,52 @@ namespace sdk {
         }
 
         void WriteTypeJson(codegen::generator_t::self_ref builder, CSchemaType* current_type) {
-            builder.begin_json_object_value().json_key("name").json_string(current_type->m_name_);
+            builder.begin_json_object_value().json_key("name").json_string(current_type->m_sTypeName.Get());
             
-            builder.json_key("category").json_literal(current_type->type_category);
+            builder.json_key("category").json_literal((int)current_type->m_eTypeCategory);
 
-            if (current_type->type_category == Schema_Atomic) {
-                builder.json_key("atomic").json_literal(current_type->atomic_category);
+            if (current_type->m_eTypeCategory == SCHEMA_TYPE_ATOMIC) {
+                builder.json_key("atomic").json_literal((int)current_type->m_eAtomicCategory);
 
-                if (current_type->atomic_category == Atomic_T && current_type->m_atomic_t_.generic_type != nullptr) {
-                    builder.json_key("outer").json_string(current_type->m_atomic_t_.generic_type->m_name_);
+                if (current_type->m_eAtomicCategory == SCHEMA_ATOMIC_T || current_type->m_eAtomicCategory == SCHEMA_ATOMIC_COLLECTION_OF_T) {
+                    const auto atomic_t = (CSchemaType_Atomic_T*)current_type;
+                    if (atomic_t->m_pAtomicInfo != nullptr) {
+                        builder.json_key("outer").json_string(atomic_t->m_pAtomicInfo->m_pszName1);
+                    }
+
+                    if (atomic_t->m_pTemplateType != nullptr) {
+                        builder.json_key("inner");
+                        WriteTypeJson(builder, atomic_t->m_pTemplateType);
+                    }
                 }
-
-                if (current_type->atomic_category == Atomic_T || current_type->atomic_category == Atomic_CollectionOfT) {
-                    builder.json_key("inner");
-                    WriteTypeJson(builder, current_type->m_atomic_t_.template_typename);
-                }
-            } else if (current_type->type_category == Schema_FixedArray) {
-                builder.json_key("arraySize").json_literal(current_type->m_array_.array_size);
+            } else if (current_type->m_eTypeCategory == SCHEMA_TYPE_FIXED_ARRAY) {
+                builder.json_key("arraySize").json_literal(((CSchemaType_FixedArray*)current_type)->m_nElementCount);
                 builder.json_key("inner");
-                WriteTypeJson(builder, current_type->m_array_.element_type_);
-            } else if (current_type->type_category == Schema_Ptr) {
+                WriteTypeJson(builder, ((CSchemaType_FixedArray*)current_type)->m_pElementType);
+            } else if (current_type->m_eTypeCategory == SCHEMA_TYPE_PTR) {
                 builder.json_key("inner");
-                WriteTypeJson(builder, current_type->m_schema_type_);
+                WriteTypeJson(builder, current_type->GetInnerType().Get());
             }
 
             builder.end_json_object();
         }
 
-        void AssembleClasses(CSchemaSystemTypeScope* current, codegen::generator_t::self_ref builder, CUtlTSHash<CSchemaClassBinding*> classes) {
+        void AssembleClasses(CSchemaSystemTypeScope* current, codegen::generator_t::self_ref builder, CUtlTSHash<CSchemaClassInfo*, 256, uint>& classes) {
             struct class_t {
                 CSchemaClassInfo* target_;
                 std::set<CSchemaClassInfo*> refs_;
 
                 [[nodiscard]] CSchemaClassInfo* GetParent() const {
-                    if (!target_->m_base_classes)
-                        return nullptr;
+                    if (target_->m_nBaseClassCount >= 1) {
+                        return target_->m_pBaseClasses[0].m_pClass;
+                    }
 
-                    return target_->m_base_classes->m_prev_by_class;
+                    return nullptr;
                 }
 
                 void AddRefToClass(CSchemaType* type) {
-                    if (type->type_category == Schema_DeclaredClass) {
-                        refs_.insert(type->m_class_info);
+                    if (type->m_eTypeCategory == SCHEMA_TYPE_DECLARED_CLASS) {
+                        refs_.insert(((CSchemaType_DeclaredClass*)type)->m_pClassInfo);
                         return;
                     }
 
@@ -192,20 +218,6 @@ namespace sdk {
                     // otherwise, order doesn`t matter.
                     return false;
                 }
-
-                SchemaClassFieldData_t* GetFirstField() {
-                    if (target_->m_fields_size > 0)
-                        return &target_->m_fields[0];
-                    return nullptr;
-                }
-
-                // @note: @es3n1n: Returns the struct size without its parent's size
-                //
-                std::ptrdiff_t ClassSizeWithoutParent() {
-                    if (CSchemaClassInfo* class_parent = this->GetParent(); class_parent)
-                        return this->target_->m_size - class_parent->m_size;
-                    return this->target_->m_size;
-                }
             };
 
             // @note: @soufiw:
@@ -213,23 +225,20 @@ namespace sdk {
             // ==================
             std::list<class_t> classes_to_dump;
 
-            for (const auto schema_class_binding : classes.GetElements()) {
-                const auto class_info = current->FindDeclaredClass(schema_class_binding->m_name);
+            UtlTSHashHandle_t* handles = new UtlTSHashHandle_t[classes.Count()];
+            classes.GetElements(0, classes.Count(), handles);
 
+            for (int i = 0; i < classes.Count(); ++i) {
+                auto class_info = classes[handles[i]];
                 auto& class_dump = classes_to_dump.emplace_back();
                 class_dump.target_ = class_info;
 
-                for (auto k = 0; k < class_info->m_fields_size; k++) {
-                    const auto field = &class_info->m_fields[k];
+                for (auto k = 0; k < class_info->m_nFieldCount; k++) {
+                    const auto field = &class_info->m_pFields[k];
                     if (!field)
                         continue;
 
-                    // forward declare all classes.
-                    // @todo: maybe we need to forward declare only pointers to classes?
-                    auto ptr = field->m_type->GetRefClass();
-                    auto actual_type = ptr ? ptr : field->m_type;
-
-                    class_dump.AddRefToClass(field->m_type);
+                    class_dump.AddRefToClass(field->m_pType);
                 }
             }
 
@@ -277,39 +286,33 @@ namespace sdk {
                 const auto class_parent = class_dump.GetParent();
                 const auto class_info = class_dump.target_;
 
-                // @note: @es3n1n: get parent name
-                //
-                std::string parent_cls_name;
-                if (auto parent = class_info->m_base_classes ? class_info->m_base_classes->m_prev_by_class : nullptr; parent) {
-                    parent_cls_name = parent->m_name;
+                builder.json_key(class_info->m_pszName).begin_json_object_value();
+
+                if (class_info->m_nBaseClassCount >= 1) {
+                    builder.json_key("parent").json_string(class_info->m_pBaseClasses[0].m_pClass->m_pszName);
                 }
-
-                // @note: @es3n1n: start class
-                //
-                builder.json_key(class_info->m_name).begin_json_object_value();
-
-                if (!parent_cls_name.empty())
-                    builder.json_key("parent").json_string(parent_cls_name);
 
                 auto write_metadata_json = [&](const SchemaMetadataEntryData_t metadata_entry) -> void {
                     std::string value;
 
-                    const auto value_hash_name = fnv32::hash_runtime(metadata_entry.m_name);
+                    const auto value_hash_name = fnv32::hash_runtime(metadata_entry.m_pszName);
 
                     builder.begin_json_object();
-                    builder.json_key("name").json_string(metadata_entry.m_name);
+                    builder.json_key("name").json_string(metadata_entry.m_pszName);
 
-                    if (strcmp(metadata_entry.m_name, "MResourceTypeForInfoType") == 0) {
+                    if (strcmp(metadata_entry.m_pszName, "MResourceTypeForInfoType") == 0) {
                         builder.end_json_object();
                         return;
                     }
+
+                    const auto metadata_value = ((CSchemaNetworkValue*)metadata_entry.m_pData);
 
                     // clang-format off
                     if (std::find(var_name_string_class_metadata_entries.begin(), var_name_string_class_metadata_entries.end(), value_hash_name) != var_name_string_class_metadata_entries.end())
                     {
                         builder.json_key("value").begin_json_object_value();
 
-                        const auto &var_value = metadata_entry.m_value->m_var_value;
+                        const auto &var_value = metadata_value->m_var_value;
                         if (var_value.m_type)
                             builder.json_key("type").json_string(var_value.m_type);
                         if (var_value.m_name)
@@ -318,15 +321,15 @@ namespace sdk {
                         builder.end_json_object();
                     }
                     else if (std::find(string_class_metadata_entries.begin(), string_class_metadata_entries.end(), value_hash_name) != string_class_metadata_entries.end())
-                        builder.json_key("value").json_string(metadata_entry.m_value->m_sz_value.data());
+                        builder.json_key("value").json_string(metadata_value->m_sz_value.data());
                     else if (std::find(var_string_class_metadata_entries.begin(), var_string_class_metadata_entries.end(), value_hash_name) != var_string_class_metadata_entries.end())
-                        builder.json_key("value").json_string(metadata_entry.m_value->m_p_sz_value);
+                        builder.json_key("value").json_string(metadata_value->m_p_sz_value);
                     else if (std::find(string_metadata_entries.begin(), string_metadata_entries.end(), value_hash_name) != string_metadata_entries.end())
-                        builder.json_key("value").json_string(metadata_entry.m_value->m_p_sz_value);
+                        builder.json_key("value").json_string(metadata_value->m_p_sz_value);
                     else if (std::find(integer_metadata_entries.begin(), integer_metadata_entries.end(), value_hash_name) != integer_metadata_entries.end())
-                        builder.json_key("value").json_literal(metadata_entry.m_value->m_n_value);
+                        builder.json_key("value").json_literal(metadata_value->m_n_value);
                     else if (std::find(float_metadata_entries.begin(), float_metadata_entries.end(), value_hash_name) != float_metadata_entries.end())
-                        builder.json_key("value").json_literal(metadata_entry.m_value->m_f_value);
+                        builder.json_key("value").json_literal(metadata_value->m_f_value);
                     // clang-format on
 
                     builder.end_json_object();
@@ -335,16 +338,18 @@ namespace sdk {
                 bool is_atomic = false;
                 std::set<std::string> network_var_names;
                 builder.json_key("metadata").begin_json_array_value();
-                for (const auto& metadata : class_info->GetStaticMetadata()) {
-                    if (strcmp(metadata.m_name, "MNetworkVarNames") == 0) {
+                for (int metadataIdx = 0; metadataIdx < class_info->m_nStaticMetadataCount; ++metadataIdx) { 
+                    const auto& metadata = class_info->m_pStaticMetadata[metadataIdx];
+                    const auto metadata_value = ((CSchemaNetworkValue*)metadata.m_pData);
+                    if (strcmp(metadata.m_pszName, "MNetworkVarNames") == 0) {
                         // Keep track of all network vars
-                        network_var_names.insert(metadata.m_value->m_var_value.m_name);
+                        network_var_names.insert(metadata_value->m_var_value.m_name);
 
                         // don't write var names - too verbose
                         continue;
                     }
                     
-                    if (strcmp(metadata.m_name, "MNetworkVarsAtomic") == 0)
+                    if (strcmp(metadata.m_pszName, "MNetworkVarsAtomic") == 0)
                     {
                         is_atomic = true;
                     }
@@ -355,17 +360,19 @@ namespace sdk {
 
                 builder.json_key("fields").begin_json_array_value();
 
-                if (strcmp(class_info->m_name, "ServerAuthoritativeWeaponSlot_t") == 0) {
-                    builder.str();
-                }
-
                 // @note: @es3n1n: begin public members
                 //
-                for (const auto& field : class_info->GetFields()) {
-                    if (!network_var_names.contains(field.m_name) && !is_atomic) {
-                        bool is_network_enable = strcmp(class_info->m_name, "ServerAuthoritativeWeaponSlot_t") == 0;
-                        for (auto j = 0; j < field.m_metadata_size; j++) {
-                            if (strcmp(field.m_metadata[j].m_name, "MNetworkEnable") == 0) {
+                if (strcmp(class_info->m_pszName, "ServerAuthoritativeWeaponSlot_t") == 0)
+                {
+                    printf(".");
+                }
+
+                for (int fieldIdx = 0; fieldIdx < class_info->m_nFieldCount; ++fieldIdx) { 
+                    const auto& field = class_info->m_pFields[fieldIdx];
+                    if (!network_var_names.contains(field.m_pszName) && !is_atomic) {
+                        bool is_network_enable = strcmp(class_info->m_pszName, "ServerAuthoritativeWeaponSlot_t") == 0;
+                        for (auto j = 0; j < field.m_nStaticMetadataCount; j++) {
+                            if (strcmp(field.m_pStaticMetadata[j].m_pszName, "MNetworkEnable") == 0) {
                                 is_network_enable = true;
                                 break;
                             }
@@ -376,17 +383,17 @@ namespace sdk {
                         }
                     }
 
-                    builder.begin_json_object().json_key("name").json_string(field.m_name);
+                    builder.begin_json_object().json_key("name").json_string(field.m_pszName);
 
                     builder.json_key("type");
 
-                    WriteTypeJson(builder, field.m_type);
+                    WriteTypeJson(builder, field.m_pType);
 
                     builder.json_key("metadata").begin_json_array_value();
 
-                    for (auto j = 0; j < field.m_metadata_size; j++) {
-                        if (strcmp(field.m_metadata[j].m_name, "MNetworkEnable")) {
-                            write_metadata_json(field.m_metadata[j]);
+                    for (auto j = 0; j < field.m_nStaticMetadataCount; j++) {
+                        if (strcmp(field.m_pStaticMetadata[j].m_pszName, "MNetworkEnable")) {
+                            write_metadata_json(field.m_pStaticMetadata[j]);
                         }
                     }
 
@@ -408,9 +415,9 @@ namespace sdk {
         // @note: @es3n1n: getting current scope name & formatting it
         //
         constexpr std::string_view dll_extension = ".dll";
-        auto scope_name = current->GetScopeName();
+        std::string scope_name = current->GetScopeName();
         if (ends_with(scope_name.data(), dll_extension.data()))
-            scope_name.remove_suffix(dll_extension.size());
+            scope_name.erase(scope_name.length() - dll_extension.size());
 
         // @note: @es3n1n: build file path
         //
@@ -418,23 +425,14 @@ namespace sdk {
             std::filesystem::create_directories(outDirName);
         const std::string out_file_path = std::format("{}\\{}.json", outDirName, scope_name);
 
-        // @note: @es3n1n: init codegen
-        //
         auto builder = codegen::get();
 
-        // @note: @es3n1n: get stuff from schema that we'll use later
-        //
-        const auto current_classes = current->GetClasses();
-        const auto current_enums = current->GetEnums();
-
-        // @note: @es3n1n: print banner
-        //
         builder.begin_json_object();
 
         // @note: @es3n1n: assemble props
         //
-        AssembleEnums(builder, current_enums);
-        AssembleClasses(current, builder, current_classes);
+        AssembleEnums(builder, current->m_EnumBindings);
+        AssembleClasses(current, builder, current->m_ClassBindings);
 
         builder.end_json_object(false);
 

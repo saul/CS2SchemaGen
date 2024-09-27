@@ -5,6 +5,7 @@
 #include <format>
 
 ICvar* g_pCVar = NULL;
+ISchemaSystem* g_pSchemaSystem = NULL;
 CreateInterfaceFn g_pfnServerCreateInterface = NULL;
 
 extern void SchemaDumpAll(const char* outDirName);
@@ -16,8 +17,10 @@ bool Connect(IAppSystem* appSystem, CreateInterfaceFn factory)
 {
 	auto result = g_pfnServerConfigConnect(appSystem, factory);
 
-	g_pCVar = (ICvar*)factory("VEngineCvar007", NULL);
+	g_pCVar = (ICvar*)factory(CVAR_INTERFACE_VERSION, NULL);
 	ConVar_Register();
+
+	g_pSchemaSystem = (ISchemaSystem*)factory(SCHEMASYSTEM_INTERFACE_VERSION, NULL);
 
 	return result;
 }
@@ -31,12 +34,12 @@ DLL_EXPORT void* CreateInterface(const char* pName, int* pReturnCode)
 		auto insecure = CommandLine()->HasParm("-insecure");
 		if (!insecure)
 		{
-			Plat_FatalErrorFunc("Refusing to load source2gen in secure mode.\n\nAdd -insecure to Counter-Strike's launch options and restart the game.");
+			//Plat_FatalErrorFunc("Refusing to load source2gen in secure mode.\n\nAdd -insecure to Counter-Strike's launch options and restart the game.");
 		}
 
 		// Generate the path to the real server.dll
 		CUtlString realServerPath(Plat_GetGameDirectory());
-		realServerPath.Append("\\csgo\\bin\\win64\\server.dll");
+		realServerPath.Append("\\citadel\\bin\\win64\\server.dll");
 		realServerPath.FixSlashes();
 
 		HMODULE serverModule = LoadLibrary(realServerPath.GetForModify());
