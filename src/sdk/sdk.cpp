@@ -158,7 +158,7 @@ namespace sdk {
                 if (current_type->m_eAtomicCategory == SCHEMA_ATOMIC_T || current_type->m_eAtomicCategory == SCHEMA_ATOMIC_COLLECTION_OF_T) {
                     const auto atomic_t = (CSchemaType_Atomic_T*)current_type;
                     if (atomic_t->m_pAtomicInfo != nullptr) {
-                        builder.json_key("outer").json_string(atomic_t->m_pAtomicInfo->m_pszName1);
+                        builder.json_key("outer").json_string(atomic_t->m_pAtomicInfo->m_pszName);
                     }
 
                     if (atomic_t->m_pTemplateType != nullptr) {
@@ -170,7 +170,7 @@ namespace sdk {
                 builder.json_key("arraySize").json_literal(((CSchemaType_FixedArray*)current_type)->m_nElementCount);
                 builder.json_key("inner");
                 WriteTypeJson(builder, ((CSchemaType_FixedArray*)current_type)->m_pElementType);
-            } else if (current_type->m_eTypeCategory == SCHEMA_TYPE_PTR) {
+            } else if (current_type->m_eTypeCategory == SCHEMA_TYPE_POINTER) {
                 builder.json_key("inner");
                 WriteTypeJson(builder, current_type->GetInnerType().Get());
             }

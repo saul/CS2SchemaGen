@@ -34,12 +34,12 @@ DLL_EXPORT void* CreateInterface(const char* pName, int* pReturnCode)
 		auto insecure = CommandLine()->HasParm("-insecure");
 		if (!insecure)
 		{
-			//Plat_FatalErrorFunc("Refusing to load source2gen in secure mode.\n\nAdd -insecure to Counter-Strike's launch options and restart the game.");
+			Plat_FatalError("Refusing to load source2gen in secure mode.\n\nAdd -insecure to the game's launch options and restart.");
 		}
 
 		// Generate the path to the real server.dll
 		CUtlString realServerPath(Plat_GetGameDirectory());
-		realServerPath.Append("\\citadel\\bin\\win64\\server.dll");
+		realServerPath.Append("\\csgo\\bin\\win64\\server.dll");
 		realServerPath.FixSlashes();
 
 		HMODULE serverModule = LoadLibrary(realServerPath.GetForModify());
@@ -47,7 +47,7 @@ DLL_EXPORT void* CreateInterface(const char* pName, int* pReturnCode)
 
 		if (g_pfnServerCreateInterface == NULL)
 		{
-			Plat_FatalErrorFunc("Could not find CreateInterface entrypoint in server.dll: %d", GetLastError());
+			Plat_FatalError("Could not find CreateInterface entrypoint in server.dll: %d", GetLastError());
 		}
 	}
 
@@ -61,7 +61,7 @@ DLL_EXPORT void* CreateInterface(const char* pName, int* pReturnCode)
 		DWORD oldProtect = 0;
 		if (!VirtualProtect(vtable, sizeof(void**), PAGE_EXECUTE_READWRITE, &oldProtect))
 		{
-			Plat_FatalErrorFunc("VirtualProtect PAGE_EXECUTE_READWRITE failed: %d", GetLastError());
+			Plat_FatalError("VirtualProtect PAGE_EXECUTE_READWRITE failed: %d", GetLastError());
 		}
 
 		// Intercept the Connect virtual method
@@ -71,7 +71,7 @@ DLL_EXPORT void* CreateInterface(const char* pName, int* pReturnCode)
 		DWORD ignore = 0;
 		if (!VirtualProtect(vtable, sizeof(void**), oldProtect, &ignore))
 		{
-			Plat_FatalErrorFunc("VirtualProtect restore failed: %d", GetLastError());
+			Plat_FatalError("VirtualProtect restore failed: %d", GetLastError());
 		}
 	}
 
